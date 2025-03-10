@@ -1,0 +1,158 @@
+JWT Authentication API-ի օգտագործման հրահանգներ
+
+1. Սկզբնական կարգավորումներ
+
+Նախ պետք է կարգավորել JWT-ը appsettings.json-ում:
+
+{
+  "JWT": {
+    "ValidAudience": "http://localhost:4200",
+    "ValidIssuer": "http://localhost:5000",
+    "Secret": "JWTAuthenticationSecretKey123456789"
+  }
+}
+
+2. Program.cs-ի կարգավորում
+
+builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
+{
+    options.SaveToken = true;
+    options.RequireHttpsMetadata = false;
+    options.TokenValidationParameters = new TokenValidationParameters()
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidAudience = builder.Configuration["JWT:ValidAudience"],
+        ValidIssuer = builder.Configuration["JWT:ValidIssuer"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Secret"]))
+    };
+});
+
+3. Ադմինի ստեղծում
+
+Նախ պետք է ստեղծել ադմին օգտատեր:
+
+POST /api/authenticate/create-admin
+Content-Type: application/json
+
+{
+    "username": "admin",
+    "email": "admin@example.com",
+    "password": "Admin123!",
+    "role": "Admin"
+}
+
+4. Օգտատերների ստեղծում
+
+Ադմինը կարող է ստեղծել նոր օգտատերներ:
+
+POST /api/authenticate/create-user
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+    "username": "client1",
+    "email": "client1@example.com",
+    "password": "Client123!",
+    "role": "User"
+}
+
+5. Token ստացում
+
+Արտաքին կլիենտների համար:
+POST /api/authenticate/token
+Content-Type: application/json
+
+{
+    "username": "client1",
+    "email": "client1@example.com",
+    "password": "Client123!",
+    "role": "User",
+    "allowedProducts": ["Product1", "Product2"]
+}
+
+Ներքին կլիենտների համար:
+POST /api/authenticate/internal-token
+Content-Type: application/json
+
+{
+    "username": "internal_client",
+    "password": "Internal123!"
+}
+
+6. API Endpoint-ների պաշտպանություն
+
+Օրինակ՝ ստեղծենք ProductController:
+
+[ApiController]
+[Route("api/[controller]")]
+public class ProductController : ControllerBase
+{
+    [HttpGet("product1")]
+    [Authorize]
+    [RequiresProduct(Product.Product1)]
+    public IActionResult GetProduct1Data()
+    {
+        return Ok("Product 1 Data");
+    }
+
+    [HttpGet("product2")]
+    [Authorize]
+    [RequiresProduct(Product.Product2)]
+    public IActionResult GetProduct2Data()
+    {
+        return Ok("Product 2 Data");
+    }
+
+    [HttpGet("internal-data")]
+    [Authorize]
+    [RequiresClaim("client_type", "internal")]
+    public IActionResult GetInternalData()
+    {
+        return Ok("Internal Data");
+    }
+}
+
+7. Օգտագործման օրինակ
+
+Կլիենտը ստանում է token և օգտագործում այն հարցումներում:
+
+GET /api/product/product1
+Authorization: Bearer <received_token>
+
+8. Ստուգումներ
+
+- Token-ը պետք է ունենա համապատասխան claims
+- Օգտատերը պետք է ունենա հասանելիություն տվյալ պրոդուկտին
+- Internal կլիենտները կարող են մուտք գործել միայն internal endpoint-ներ
+- Ադմինը կարող է ստեղծել նոր օգտատերներ
+
+9. Սխալների մշակում
+
+Կոդը ավտոմատ կերպով վերադարձնում է համապատասխան սխալներ՝
+- 401 Unauthorized - եթե token-ը բացակայում է կամ անվավեր է
+- 403 Forbidden - եթե օգտատերը չունի հասանելիություն
+- 400 Bad Request - եթե հարցման տվյալները սխալ են
+
+10. Անվտանգության խորհուրդներ
+
+- Միշտ օգտագործեք HTTPS
+- Ուժեղ գաղտնաբառեր պահանջեք
+- Token-ների ժամկետը սահմանափակեք
+- Ռեգուլյար կերպով թարմացրեք token-ները
+- Մոնիտորինգ արեք անվավեր մուտքերի փորձերը
+
+Նման կառուցվածքը թույլ է տալիս՝
+- Անվտանգ կերպով կառավարել հասանելիությունը
+- Ունենալ տարբեր մակարդակների օգտատերներ
+- Հեշտությամբ ավելացնել նոր պրոդուկտներ
+- Առանձնացնել internal և external կլիենտների հասանելիությունը 
